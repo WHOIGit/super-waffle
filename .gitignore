@@ -53,5 +53,7 @@ rsconnect/
 .Rhistory
 .RData
 .Ruserdata
+.DS_Store
 counts_combined.tsv.gz
+00_seqpain_refs.R
 >>>>>>> 0450700 (editing for MCGomics bash)
