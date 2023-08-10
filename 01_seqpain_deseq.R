@@ -688,8 +688,15 @@ gene_tx_EnsDb <- read_rds(file = paste0(dir, "/data/gene_tx_EnsDb.rds"))
 #                             name_repair = "unique",
 #                             trim_ws = TRUE)
 
+counts_combined <- read_tsv(file = "https://github.com/labsyspharm/seqpain/raw/main/data/counts_combined.tsv.gz",
+                            col_names = TRUE,
+                            name_repair = "unique",
+                            trim_ws = TRUE)
+
 #import metadata
-rnaseq_metadata <- read_tsv(file = paste0(dir, "/data/rnaseq_metadata.tsv"),
+rnaseq_metadata <- read_tsv(
+  file = "https://github.com/labsyspharm/seqpain/raw/main/data/rnaseq_metadata.tsv",
+  # file = paste0(dir, "/data/rnaseq_metadata.tsv"),
                             col_names = TRUE,
                             name_repair = "unique",
                             trim_ws = TRUE) %>%
@@ -706,41 +713,51 @@ rnaseq_metadata <- read_tsv(file = paste0(dir, "/data/rnaseq_metadata.tsv"),
 
 # #summarize transcripts to genes, remove non-protein-coding genes
 # #(multicore enabled)
-# counts_rep_protcod_df <- counts_combined %>%
-#   dplyr::mutate(gene_symbol = na_if(str_squish(gene_symbol), ""), 
-#                 description = na_if(str_squish(description), "")) %>%
-#   dplyr::mutate(gene_symbol = factor(gene_symbol),
-#                 gene_biotype = factor(gene_biotype, levels = levels(addNA(gene_tx_EnsDb$gene_biotype)), 
-#                                       labels = c(levels(gene_tx_EnsDb$gene_biotype), "Unspecified"), exclude = NULL)) %>%
-#   dplyr::slice(which(gene_symbol != "")) %>%
-#   dplyr::slice(which(gene_biotype == "protein_coding")) %>%
-#   droplevels(.) %>%
-#   tidyr::pivot_longer(., cols = !c(tx_id, gene_id, gene_symbol, description, gene_biotype),
-#                       names_to = "seq_name",
-#                       values_to = "reads") %>%
-#   dplyr::mutate(across(!contains("reads"), factor)) %>%
-#   dplyr::left_join(., rnaseq_metadata %>%
-#                      dplyr::select(seq_name, sample_name) %>%
-#                      distinct(.) %>%
-#                      droplevels(.) %>%
-#                      dplyr::mutate(across(everything(), factor))) %>%
-#   dplyr::select(-c(seq_name, tx_id)) %>%
-#   dplyr::mutate(across(!contains("reads"), factor)) %>%
-#   distinct(.) %>%
-#   multidplyr::partition(cluster) %>% #speed it up; but if you don't have multicore processing, comment this out
-#   dplyr::group_by(across(where(is.factor))) %>%
-#   dplyr::summarise(counts = sum(reads, na.rm = TRUE)) %>%
-#   collect() %>% #speed it up; see above
-#   droplevels(.) %>%
-#   as_tibble() %>%
-#   dplyr::mutate(sample_name = factor(sample_name, 
-#                                      levels = levels(rnaseq_metadata$sample_name)))
+counts_rep_protcod_df <- counts_combined %>%
+  dplyr::mutate(gene_symbol = na_if(str_squish(gene_symbol), ""),
+                description = na_if(str_squish(description), "")) %>%
+  dplyr::mutate(gene_symbol = factor(gene_symbol),
+                gene_biotype = factor(gene_biotype, levels = levels(addNA(gene_tx_EnsDb$gene_biotype)),
+                                      labels = c(levels(gene_tx_EnsDb$gene_biotype), "Unspecified"), exclude = NULL)) %>%
+  dplyr::slice(which(gene_symbol != "")) %>%
+  dplyr::slice(which(gene_biotype == "protein_coding")) %>%
+  droplevels(.) %>%
+  tidyr::pivot_longer(., cols = !c(tx_id, gene_id, gene_symbol, description, gene_biotype),
+                      names_to = "seq_name",
+                      values_to = "reads") %>%
+  dplyr::mutate(across(!contains("reads"), factor)) %>%
+  dplyr::left_join(., rnaseq_metadata %>%
+                     dplyr::select(seq_name, sample_name) %>%
+                     distinct(.) %>%
+                     droplevels(.) %>%
+                     dplyr::mutate(across(everything(), factor))) %>%
+  dplyr::select(-c(seq_name, tx_id)) %>%
+  dplyr::mutate(across(!contains("reads"), factor)) %>%
+  distinct(.) %>%
+  multidplyr::partition(cluster) %>% #speed it up; but if you don't have multicore processing, comment this out
+  dplyr::group_by(across(where(is.factor))) %>%
+  dplyr::summarise(counts = sum(reads, na.rm = TRUE)) %>%
+  collect() %>% #speed it up; see above
+  droplevels(.) %>%
+  as_tibble() %>%
+  dplyr::mutate(sample_name = factor(sample_name,
+                                     levels = levels(rnaseq_metadata$sample_name)))
+
+write_tsv(counts_rep_protcod_df, 
+          file = paste0(dir, "/data/counts_rep_protcod_df.tsv.gz"), 
+          quote = "none", 
+          col_names = TRUE)
 
 #import the counts files
-counts_rep_protcod_df <- read_tsv(file = paste0(dir, "/data/counts_protcod_combined.tsv.gz"),
-                            col_names = TRUE,
-                            name_repair = "unique",
-                            trim_ws = TRUE)
+# counts_rep_protcod_df <- read_tsv(file = paste0(dir, "/data/counts_rep_protcod_df.tsv.gz"),
+#                             col_names = TRUE,
+#                             trim_ws = TRUE,
+#                             name_repair = "unique")
+
+
+counts_rep_protcod_df <- readr::read_delim(file = paste0(dir, "/data/counts_rep_protcod_df.tsv.gz"), 
+                                           delim = "\t", col_names = TRUE,
+                                           num_threads = num_threads)
 
 tpm_rep_protcod_df <- bind_rows(F_calculateTPM(cell = "brca", counts_df = counts_rep_protcod_df, mdata = rnaseq_metadata),
                                 F_calculateTPM(cell = "nociceptor", counts_df = counts_rep_protcod_df, mdata = rnaseq_metadata))
